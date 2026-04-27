@@ -1,5 +1,7 @@
 01. Feature Optimization and Analysis
+
 Objective
+
 In real-world credit scoring systems, maintaining a massive number of features increases data management costs and operational complexity. This phase focuses on optimizing model efficiency by identifying a "Lightweight Feature Set" that maintains high predictive power with significantly fewer variables.
 
 Key Methodology
