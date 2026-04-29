@@ -48,7 +48,7 @@ Attempted to replace external signals with an internal `neighbors_target_mean` (
 ## Key Insights
 1.  **Metric Misalignment**: Statistical gains (AUC) do not always translate into business profit. Small dips in AUC can lead to massive financial exposure.
 2.  **Dependency Risk**: Over-reliance on external data creates a fragile model. Robustness requires developing individual-centric internal features.
-3.  **Strategy over Score**: A model's "logic" (how it decides) is as 중요한 as its "score."
+3.  **Strategy over Score**: A model's "logic" (how it decides) is as important as its "score."
 
 ---
 
