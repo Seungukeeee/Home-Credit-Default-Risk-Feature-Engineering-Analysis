@@ -1,6 +1,36 @@
 # Home Credit Default Risk — Feature Engineering, Model Optimization & Risk Threshold Analysis
 
 > **Scope note**: This repository covers the full pipeline in four phases — from raw-table feature engineering through feature selection, robustness stress-testing, and business-driven threshold optimization. Phase 0 (feature engineering) reproduces and extends **kozodoi's public Kaggle solution** for the Home Credit Default Risk competition; Phases 1–3 are original analysis built on top of that feature set.
+---
+
+## Results at a Glance
+
+| Question tested | Result | Business impact |
+|---|---|---|
+| Can the feature set shrink without losing performance? | **1,389 → 483 features (-65.2%)** at only -0.0034 AUC | Lower data-acquisition cost, same risk quality |
+| What happens if the top 3 features disappear? | AUC -0.017, but **+515 missed defaults** | **-$90.2M** estimated loss |
+| Can an internal proxy replace external bureau signals? | AUC **+0.0009**, but **+112 missed defaults** | **-$11.7M** despite the AUC gain |
+| Do non-financial features (education, behavior, family) help? | AUC +0.0001–0.0005 | **No FN improvement** — 2 of 3 groups made it worse |
+| Does moving the decision threshold help more than adding features? | Threshold 0.15 vs. 0.50: **-1,330+ False Negatives** | **+$860M** net benefit — the single largest lever found |
+
+**Bottom line**: in this dataset, adjusting the decision threshold changed business outcomes more
+than any feature-side intervention did. AUC moved by fractions of a point across every experiment;
+the dollar impact moved by tens to hundreds of millions. See each phase below for methodology.
+
+---
+
+## What I Reproduced vs. What I Designed
+
+| | Scope | Ownership |
+|---|---|---|
+| **Phase 0 — Feature Engineering** | Reproduces kozodoi's public Kaggle solution (7-table merge, ratio features, aggregation) | Reproduction; my own contribution here is limited to extending `compute_accept_reject_ratio` to multiple lag windows and documenting the leakage/missing-value/outlier decisions the original solution makes implicitly |
+| **Phase 1 — Feature Optimization** | Gain-based feature elimination, 95% cumulative-importance cutoff | Designed and run by me |
+| **Phase 2 — Robustness Check** | Feature stress test, KNN proxy feature, SHAP analysis | Designed and run by me |
+| **Phase 3 — Non-Financial Features & Threshold** | Hypothesis groups, net-benefit threshold sweep | Designed and run by me |
+
+The judgment calls this project is meant to demonstrate — what to test, what "success" means for
+each test, and how to translate a confusion matrix into a dollar figure — live entirely in Phases
+1–3.
 
 ---
 
