@@ -3,6 +3,42 @@
 > **Scope note**: This repository covers the full pipeline in four phases — from raw-table feature engineering through feature selection, robustness stress-testing, and business-driven threshold optimization. Phase 0 (feature engineering) reproduces and extends **kozodoi's public Kaggle solution** for the Home Credit Default Risk competition; Phases 1–3 are original analysis built on top of that feature set.
 ---
 
+## Problem Definition
+
+Design a credit-scoring pipeline for **unbanked and underserved applicants** that goes beyond asingle AUC number: build the feature set from raw transactional and bureau data, then verify **how few features, how sensitive to its top signals, and at what decision threshold** the model actually minimizes real lending losses (False Negatives), rather than only maximizing a statistical score.
+
+---
+
+## Validation Setup
+
+*What every result in this README rests on — read this before the numbers below.*
+
+**Target**: `TARGET` follows the Home Credit competition's standard definition — `1` if the client
+had payment difficulties (late repayment), `0` otherwise.
+
+**Data split**: `application_train`/`application_test` are concatenated for feature engineering,
+then split back apart by `SK_ID_CURR` membership *after* all transformations are applied — so both
+sets go through an identical pipeline and no train-only statistic leaks into test. Model validation
+uses a fixed **5-fold `StratifiedKFold(random_state=42)`**, reused unchanged across every phase and
+every experiment below, so results are comparable to each other rather than each drawing a
+different lucky fold.
+
+**Leakage prevention**:
+- `TARGET` is separated from the feature tables *before* any feature engineering step
+  (`y = train[["SK_ID_CURR","TARGET"]]; del train["TARGET"]`), so it cannot leak into aggregation or
+  encoding.
+- Historical tables (`bureau`, `previous_application`, `installments_payments`,
+  `POS_CASH_balance`, `credit_card_balance`) record **past** credit behavior and are aggregated to
+  one row per client (mean/std/min/max/mode/count) before merging — this avoids row-level
+  duplication leakage during the join.
+
+**Baseline**: the reference point for every experiment in this README is the **483-feature model**
+from Phase 1 — **CV AUC 0.7889**, 24,825 actual defaults, 23,589 missed at the default 0.50
+threshold. Every number quoted below (AUC change, FN change, dollar impact) is measured *against
+this baseline*, not against the raw 1,389-feature model.
+
+---
+
 ## Results at a Glance
 
 | Question tested | Result | Business impact |
@@ -28,15 +64,7 @@ the dollar impact moved by tens to hundreds of millions. See each phase below fo
 | **Phase 2 — Robustness Check** | Feature stress test, KNN proxy feature, SHAP analysis | Designed and run by me |
 | **Phase 3 — Non-Financial Features & Threshold** | Hypothesis groups, net-benefit threshold sweep | Designed and run by me |
 
-The judgment calls this project is meant to demonstrate — what to test, what "success" means for
-each test, and how to translate a confusion matrix into a dollar figure — live entirely in Phases
-1–3.
-
----
-
-## Problem Definition
-
-Design a credit-scoring pipeline for **unbanked and underserved applicants** that goes beyond asingle AUC number: build the feature set from raw transactional and bureau data, then verify **how few features, how sensitive to its top signals, and at what decision threshold** the model actually minimizes real lending losses (False Negatives), rather than only maximizing a statistical score.
+The judgment calls this project is meant to demonstrate — what to test, what "success" means for each test, and how to translate a confusion matrix into a dollar figure — live entirely in Phases 1–3.
 
 ---
 
@@ -213,6 +241,4 @@ in this repository.
    paths** (`../data`, `../models`) for cross-environment compatibility.
 
 ### Attribution
-Phase 0's feature engineering reproduces and extends the public solution by Kaggle Grandmaster
-**kozodoi** for the Home Credit Default Risk competition, used here for learning purposes and as
-the foundation for the original analysis in Phases 1–3.
+Phase 0's feature engineering reproduces and extends the public solution by Kaggle Grandmaster **kozodoi** for the Home Credit Default Risk competition, used here for learning purposes and as the foundation for the original analysis in Phases 1–3.
