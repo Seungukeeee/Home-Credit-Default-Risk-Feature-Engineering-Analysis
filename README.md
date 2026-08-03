@@ -32,26 +32,24 @@ different lucky fold.
   one row per client (mean/std/min/max/mode/count) before merging — this avoids row-level
   duplication leakage during the join.
 
-**Baseline**: the reference point for every experiment in this README is the **483-feature model**
-from Phase 1 — **CV AUC 0.7889**, 24,825 actual defaults, 23,589 missed at the default 0.50
-threshold. Every number quoted below (AUC change, FN change, dollar impact) is measured *against
+**Baseline**: the reference point for every experiment in this README is the **483-feature model** from Phase 1 — **CV AUC 0.7889**, 24,825 actual defaults, 23,589 missed at the default 0.50 threshold. Every number quoted below (AUC change, FN change, dollar impact) is measured *against
 this baseline*, not against the raw 1,389-feature model.
 
 ---
 
 ## Results at a Glance
 
+My call, in one line: this dataset doesn't need more features — it needs its decision threshold moved. Every feature-side intervention below (removing top features, building a proxy, adding non-financial data) changed the dollar outcome by single-digit millions at best; moving the threshold alone changed it by hundreds of millions. That's the judgment this project is built to demonstrate, and the numbers below are the evidence for it.
+
 | Question tested | Result | Business impact |
 |---|---|---|
 | Can the feature set shrink without losing performance? | **1,389 → 483 features (-65.2%)** at only -0.0034 AUC | Lower data-acquisition cost, same risk quality |
 | What happens if the top 3 features disappear? | AUC -0.017, but **+515 missed defaults** | **-$90.2M** estimated loss |
 | Can an internal proxy replace external bureau signals? | AUC **+0.0009**, but **+112 missed defaults** | **-$11.7M** despite the AUC gain |
-| Do non-financial features (education, behavior, family) help? | AUC +0.0001–0.0005 | **No FN improvement** — 2 of 3 groups made it worse |
-| Does moving the decision threshold help more than adding features? | Threshold 0.15 vs. 0.50: **-1,330+ False Negatives** | **+$860M** net benefit — the single largest lever found |
+| Do non-financial features (education, behavior, family) help? | Best case (Family/Social), re-optimizing threshold too: +30 FN caught | **+$15.9M** — real, but <2% of what threshold tuning alone achieves below |
+| Does moving the decision threshold help more than adding features? | At threshold 0.15, Recall jumps from **4.5%** → **46.6%** (baseline's 0.50) | **+$860M** net benefit — the single largest lever found |
 
-**Bottom line**: in this dataset, adjusting the decision threshold changed business outcomes more
-than any feature-side intervention did. AUC moved by fractions of a point across every experiment;
-the dollar impact moved by tens to hundreds of millions. See each phase below for methodology.
+**Bottom line**: the baseline model, used at the standard 0.50 threshold, catches only 4.5% of actual defaulters (Recall) — it is close to useless for risk management as shipped. Every feature-side experiment below moved that needle by low single-digit percentage points at best. Threshold tuning alone moved Recall by 10x and net benefit by $860M. AUC barely moved across any experiment (±0.02 at most); the business impact moved by orders of magnitude more than AUC did — which is the core reason this project treats AUC as a poor proxy for the actual decision problem. See each phase below for full methodology and the Recall/Precision trade-off at every threshold.
 
 ---
 
@@ -175,34 +173,56 @@ Attempted to replace external bureau signals with an internal `neighbors_target_
 <img width="605" height="366" alt="image" src="https://github.com/user-attachments/assets/7fb31864-053f-4e4b-a4f7-396cfce40473" />
 
 ### 1. Non-Financial Feature Groups
-Features removed during Phase 1's selection were reviewed for non-financial content and grouped into three hypotheses, then re-added to the 483-feature baseline:
 
-- **Behavioral patterns** (document flags, application weekday): hypothesis — application timing and completeness reflect a client's diligence/organization.
+> **Hypothesis**: features filtered out for low importance in Phase 1 might still carry business value if grouped thematically (behavior, education/occupation, family structure) rather than judged feature-by-feature.
+> **Result**: partially confirmed, then reframed. At a fixed 0.50 threshold, none of the three groups meaningfully help (two make False Negatives worse). But letting each group re-optimize its own decision threshold reveals a small, genuine improvement — the more important finding is *how small* it is next to Phase 3.2 below.
+
+Features removed during Phase 1's selection were reviewed for non-financial content and grouped
+into three hypotheses, then re-added to the 483-feature baseline:
+
+- **Behavioral patterns** (document flags, application weekday): hypothesis — application timing
+  and completeness reflect a client's diligence/organization.
 - **Education / occupation**: hypothesis — occupational stability correlates with income stability.
 - **Family / social structure**: hypothesis — household composition affects financial obligations.
 
-| Group | CV AUC | ΔAUC vs. baseline | ΔFalse Negatives vs. baseline |
-|---|---|---|---|
-| Baseline (483 features) | 0.7889 | – | – |
-| + Behavioral | 0.7890 | +0.0001 | +8 |
-| + Education/Occupation | 0.7894 | +0.0005 | +21 |
-| + Family/Social | 0.7889 | ~0.0000 | -1 |
+**At a fixed 0.50 threshold** (the standard classification cutoff), none of the three groups clearly
+helped — AUC moved by 0.0001–0.0005 and two groups showed slightly *more* missed defaults, not
+fewer.
 
-**Interpretation**: none of the three groups meaningfully reduced False Negatives — two groups *increased* them despite a marginal AUC gain. These features were already present in the original 1,389-feature set and had been filtered out for low importance in Phase 1; testing low-importance features already excluded from the model tested "low-importance non-financial features already in the dataset," not genuine new external data. That distinction matters and is stated explicitly rather than implied as a general finding about non-financial data.
+**Letting each group find its own optimal threshold** (`combined_experiment_summary.csv`) tells a
+different, more precise story:
+
+| Group | Its own optimal threshold | FN reduction vs. baseline (at that threshold) | Net benefit |
+|---|---|---|---|
+| Baseline (483 features) | 0.05 | — (reference) | $0 |
+| + Behavioral | 0.10 | +49 fewer missed defaults | **+$5.6M** |
+| + Education/Occupation | 0.05 | +9 fewer missed defaults | **+$15.6M** |
+| + Family/Social | 0.05 | +30 fewer missed defaults | **+$15.9M** |
+
+**Interpretation**: all three groups *do* produce a small, real improvement once the threshold is also allowed to move — this is a more accurate finding than "non-financial features don't help," and it's worth stating precisely rather than rounding down to a flat no. But the scale is the point: the best of the three (Family/Social, +$15.9M) delivers **under 2% of the $860M** achieved by threshold optimization alone on the unchanged baseline (Phase 3.2, below) — with no new features, no new data collection, and no added model complexity. These features were also already present in the original 1,389-feature set and had been filtered out for low importance in Phase 1, so this
+tests "low-importance non-financial features already in the dataset," not genuinely new external data — a caveat worth keeping in mind before generalizing the conclusion.
 
 ### 2. Structural Change: Threshold Optimization
-Rather than adding features, the decision threshold was swept from 0.05 to 0.50 to measure its effect on the False Negative / False Positive trade-off and net business benefit.
 
-| Threshold | FN reduction vs. 0.50 | Net benefit |
-|---|---|---|
-| 0.40 | -1,330 | positive |
-| 0.30 | -3,569 | positive, FP growing faster |
-| **0.15** | — | **+$860M (peak)** |
-| 0.05 | — | **-$346M (FP overwhelms gains)** |
+> **Hypothesis**: if adding features (Phase 3.1) barely moves the needle, a lever that doesn't touch features at all — the decision threshold — might matter more.
+> **Result**: confirmed, by roughly two orders of magnitude — this was the single highest-leverage change found across all four phases.
 
-**Net benefit formula**: `(FN_reduction × avg_loan_amount) − (FP_increase × avg_loan_amount × opportunity_cost_rate)`, using an average loan amount of $175,233 and an 18% opportunity cost for false positives.
+Rather than adding features, the decision threshold on the unchanged 483-feature baseline was swept from 0.05 to 0.50, tracking Recall, Precision, and net business benefit at each point(`threshold_analysis.csv`).
 
-**Business framework**: the "optimal" threshold depends on what the business optimizes for — pure profit maximization favors 0.15, while operational and regulatory constraints (manual review capacity, customer experience) make 0.30–0.40 more realistic in practice.
+| Threshold | Recall | Precision | Net benefit vs. 0.50 |
+|---|---|---|---|
+| 0.05 | 0.830 | 0.147 | **-$346.5M** (FP overwhelms gains) |
+| 0.10 | 0.624 | 0.212 | +$731.2M |
+| **0.15** | 0.466 | 0.268 | **+$860.4M (peak)** |
+| 0.20 | 0.351 | 0.319 | +$766.7M |
+| 0.25 | 0.256 | 0.359 | +$584.9M |
+| 0.30 | 0.189 | 0.404 | +$433.3M |
+| 0.50 (baseline) | 0.045 | 0.577 | $0 (reference) |
+
+**Net benefit formula**: `(FN_reduction × avg_loan_amount) − (FP_increase × avg_loan_amount × opportunity_cost_rate)`, using an average loan amount of $175,233 and an 18% opportunity cost for false positives, both relative to the 0.50 baseline.
+
+**My recommendation**: 0.15 maximizes net benefit on paper, but at that point only **26.8%** of flagged applications are true defaults (Precision) — meaning roughly 3 in 4 flagged clients would be manually reviewed for nothing, which has a real operational cost this formula doesn't capture (reviewer headcount, customer friction, false-decline reputational risk). I'd recommend **0.20–0.25** as the practical operating point instead: it keeps ~80–90% of the theoretical net benefit ($585–767M vs. the $860M peak) while cutting the false-positive review load roughly in half
+versus 0.15 (Precision 0.32–0.36 vs. 0.27). The exact choice ultimately depends on the bank's actual manual-review capacity, which isn't modeled here — but the direction (move well away from 0.50, land short of the raw net-benefit peak) is a judgment call I'd defend in a business review, not just a number I'd report.
 
 ---
 
@@ -211,7 +231,7 @@ Rather than adding features, the decision threshold was swept from 0.05 to 0.50 
 1. **Metric misalignment**: statistical gains (AUC) do not always translate into business profit; a small AUC dip can accompany a very large financial exposure change, and vice versa (Phase 2.2).
 2. **Dependency risk**: over-reliance on a small number of external features creates a fragile model — losing 3 features cost $90.2M in this experiment (Phase 2.1).
 3. **Strategy over score**: a model's decision logic (how it decides) matters as much as its score.
-4. **Features are not the only lever**: adjusting the decision threshold alone reduced False Negatives by 1,330+ cases without touching a single feature — an effect feature engineering alone did not achieve in this experiment (Phase 3.2).
+4. **Threshold >> features, quantified**: the best feature-side intervention tested (adding Family/Social features, Phase 3.1) delivered $15.9M in net benefit; moving the decision threshold alone on the exact same model delivered $860M (Phase 3.2) — roughly 50x more, with zero new data and zero added complexity. If I had to prioritize one lever on a real team with limited time, this is the evidence I'd bring to that conversation.
 
 ---
 
